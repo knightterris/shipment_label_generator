@@ -1,0 +1,23 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        "shipmentBatches": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".indexOn": ["createdAt"],
+          "$batchId": {
+            ".write": "auth != null && auth.uid === $uid && !data.exists() && newData.exists()",
+            ".validate": "newData.hasChildren(['shipments', 'logo', 'schemaVersion', 'createdAt'])",
+            "shipments": { ".validate": "newData.hasChildren()" },
+            "logo": { ".validate": "newData.isString() && newData.val().length <= 850000" },
+            "schemaVersion": { ".validate": "newData.val() === 1" },
+            "createdAt": { ".validate": "newData.isNumber() && newData.val() === now" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    }
+  }
+}
