@@ -13,6 +13,38 @@ export default function SavedShipments({ shipments, logo, onOpen, notify }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [signingIn, setSigningIn] = useState(false);
+
+  const [search, setSearch] = useState('');
+
+  // Ignore capitalization, spaces, and common phone-number punctuation.
+  const normalizeSearch = value =>
+    String(value ?? '')
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/[\s()+\-]/g, '');
+
+  const searchQuery = normalizeSearch(search);
+
+  const filteredRecords = records.filter(record =>
+    !searchQuery ||
+    (record.shipments ?? []).some(shipment => {
+      const fields = [
+        shipment.receiverName,
+        shipment.receiverPhone,
+        shipment.receiverDetail,
+        shipment.senderName,
+        shipment.senderPhone,
+        shipment.senderDetail,
+        shipment.notes,
+        shipment.platform !== 'NONE' ? shipment.platform : '',
+        shipment.platform !== 'NONE' ? shipment.order : '',
+      ];
+
+      return fields.some(value =>
+        normalizeSearch(value).includes(searchQuery)
+      );
+    })
+  );
   useEffect(() => watchAccount(user => { setAccount(user); setRecords([]); }), []);
   async function signIn(event) {
     event.preventDefault(); setSigningIn(true); setError('');
@@ -62,10 +94,63 @@ export default function SavedShipments({ shipments, logo, onOpen, notify }) {
           <p>After signing in, close this panel and click Save to store your batch.</p>
         </form> : <>
           <div className="account-row"><span>{account.email}</span><button className="button small" onClick={async()=>{try{await logout()}catch{setError('Could not sign out. Please try again.')}}}>Sign out</button></div>
-          <button className="button small refresh-button" onClick={refresh} disabled={loading}><RefreshCw size={14}/>{loading ? 'Loading…' : 'Refresh list'}</button>
+          {/* <button className="button small refresh-button" onClick={refresh} disabled={loading}><RefreshCw size={14}/>{loading ? 'Loading…' : 'Refresh list'}</button> */}
+          <div className="saved-toolbar">
+            <button
+              className="button small refresh-button"
+              onClick={refresh}
+              disabled={loading}
+            >
+              <RefreshCw size={14} />
+              {loading ? 'Loading…' : 'Refresh list'}
+            </button>
+
+            <div className="saved-search">
+              <input
+                type="search"
+                aria-label="Search saved shipments"
+                placeholder="Search name, phone, order, address…"
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+              />
+
+              {search && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Clear search"
+                  onClick={() => setSearch('')}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
           {error && <p role="alert" className="saved-error">{error}</p>}
           {!loading && !error && records.length===0 && <div className="saved-empty"><FolderOpen size={28}/><h3>No saved shipments yet</h3><p>Use Save to keep your first batch here.</p></div>}
-          <div className="saved-records">{records.map(record => <article key={record.id}>
+          {!loading && !error && records.length > 0 && searchQuery && (
+            <p className="saved-search-count" role="status">
+              {filteredRecords.length} matching batch
+              {filteredRecords.length === 1 ? '' : 'es'}
+            </p>
+          )}
+
+          {!loading &&
+            !error &&
+            records.length > 0 &&
+            filteredRecords.length === 0 && (
+              <div className="saved-empty">
+                <h3>No matching shipments</h3>
+                <p>Try another name, phone number, order number, or address.</p>
+                <button
+                  className="button small"
+                  onClick={() => setSearch('')}
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+          <div className="saved-records">{filteredRecords.map(record => <article key={record.id}>
             <div><h3>{record.shipments?.[0]?.receiverName || 'Shipment batch'}</h3><p>{record.shipments.length} label{record.shipments.length===1?'':'s'} · {new Date(record.createdAt).toLocaleString()}</p><span>{record.shipments.filter(s=>s.platform!=='NONE'&&s.order).map(s=>s.order).join(' · ') || 'No order numbers'}</span></div>
             <button className="button small" onClick={() => { onOpen(record); setOpen(false); }} aria-label={`Open ${record.shipments?.[0]?.receiverName || 'shipment batch'}`}>Open<ArrowUpRight size={14}/></button>
           </article>)}</div>
